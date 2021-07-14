@@ -328,13 +328,14 @@ class Worker:
                 return
             count = min(burst_jobs_remaining, count)
 
-        async with self.sem:  # don't bother with zrangebyscore until we have "space" to run the jobs
-            now = timestamp_ms()
-            job_ids = await self.pool.zrangebyscore(
-                self.queue_name, offset=self._queue_read_offset, count=count, max=now
-            )
+        if not self.sem.locked():
+            async with self.sem:  # don't bother with zrangebyscore until we have "space" to run the jobs
+                now = timestamp_ms()
+                job_ids = await self.pool.zrangebyscore(
+                    self.queue_name, offset=self._queue_read_offset, count=count, max=now
+                )
 
-        await self.start_jobs(job_ids)
+            await self.start_jobs(job_ids)
 
         if self.allow_abort_jobs:
             await self._cancel_aborted_jobs()
